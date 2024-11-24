@@ -1,5 +1,5 @@
 const USE_GPU = false
-using ParallelStencil
+using ParallelStencil, ImplicitGlobalGrid
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 3)
@@ -7,6 +7,17 @@ else
     @init_parallel_stencil(Threads, Float64, 3)
 end
 using Plots, Printf, Statistics, LinearAlgebra
+import MPI
+
+max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
+min_g(A) = (min_l = minimum(A); MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD))
+
+function save_array(Aname, A)
+    fname = string(Aname, ".bin")
+    out = open(fname, "w")
+    write(out, A)
+    close(out)
+end
 
 @parallel function assign!(A::Data.Array, B::Data.Array)
     @all(A) = @all(B)
@@ -142,14 +153,16 @@ end
     ρ0gα      = Ra * η0 * DcT / ΔT / ly^3  # thermal expansion coefficient
     dη_dT     = 1e-10 / ΔT         # viscosity's temperature dependence
     # Numerics
-    nx, ny, nz = 96 * ar - 1, 96 - 1, 96 - 1  # numerical grid resolutions
-    iterMax   = 5 * 10^4            # maximal number of pseudo-transient iterations
-    nt        = 3000                # total number of timesteps
-    nout      = 10                  # frequency of plotting
-    nerr      = 100                 # frequency of error checking
-    ε         = 1e-4                # nonlinear absolute tolerance
-    dmp       = 2                   # damping parameter
-    st        = 5                   # quiver plotting spatial step
+    nx, ny, nz = 32,32,32  # numerical grid resolutions
+    me, dims   = init_global_grid(nx, ny, nz)
+    b_width    = (2, 2, 2)
+    iterMax   = 10max(nx_g(),ny_g(),nz_g())     # maximal number of pseudo-transient iterations
+    nt        = 3000                            # total number of timesteps
+    nout      = 10                              # frequency of plotting
+    nerr      = ceil(2max(nx_g(),ny_g(),nz_g()))   # frequency of error checking
+    ε         = 1e-4                            # nonlinear absolute tolerance
+    dmp       = 2                               # damping parameter
+    st        = 5                               # quiver plotting spatial step
     # Derived numerics
     dx, dy, dz = lx / (nx - 1), ly / (ny - 1), lz / (nz - 1)  # cell sizes
     ρ         = 1.0 / Pra * η0 / DcT                # density
@@ -209,10 +222,16 @@ end
             @parallel compute_0!(RogT, Eta, ∇V, T, Vx, Vy, Vz, ρ0gα, η0, dη_dT, ΔT, dx, dy, dz)
             @parallel compute_1!(Pt, τxx, τyy, τzz, σxy, σxz, σyz, Eta, ∇V, Vx, Vy, Vz, dτ_iter, β, dx, dy, dz)
             @parallel compute_2!(Rx, Ry, Rz, dVxdτ, dVydτ, dVzdτ, Pt, RogT, τxx, τyy, τzz, σxy, σxz, σyz, ρ, dampX, dampY, dampZ, dτ_iter, dx, dy, dz)
-            @parallel update_V!(Vx, Vy, Vz, dVxdτ, dVydτ, dVzdτ, dτ_iter)
-            @parallel (1:size(Vx, 2), 1:size(Vx, 3)) bc_x!(Vx)
-            @parallel (1:size(Vy, 1), 1:size(Vy, 3)) bc_y!(Vy)
-            @parallel (1:size(Vz, 1), 1:size(Vz, 2)) bc_z!(Vz)
+            @hide_communication b_width begin
+                @parallel update_V!(Vx, Vy, Vz, dVxdτ, dVydτ, dVzdτ, dτ_iter)
+                @parallel (1:size(Vy, 2), 1:size(Vy, 3)) bc_x!(Vy)
+                @parallel (1:size(Vz, 2), 1:size(Vz, 3)) bc_x!(Vz)
+                @parallel (1:size(Vx, 1), 1:size(Vx, 3)) bc_y!(Vx)
+                @parallel (1:size(Vz, 1), 1:size(Vz, 3)) bc_y!(Vz)
+                @parallel (1:size(Vx, 1), 1:size(Vx, 2)) bc_z!(Vx)
+                @parallel (1:size(Vy, 1), 1:size(Vy, 2)) bc_z!(Vy)
+                update_halo!(Vx, Vy, Vz)
+            end
             # @parallel compute_error!(ErrVx, Vx)
             # @parallel compute_error!(ErrVy, Vy)
             @parallel compute_error!(ErrVz, Vz)
@@ -236,7 +255,8 @@ end
                      dz / maximum(abs.(Array(Vz)))) / 3.1
         dt     = min(dt_diff, dt_adv)
         @parallel update_T!(T, T_old, dT_dt, dt)
-        @parallel_indices (ix, iy, iz) no_flux_T!(T)
+        @parallel no_fluxZ_T!(T)
+        update_halo!(T)
         @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, maximum([errVx, errVy, errVz]), errP)
         # Visualization (optional)
         # if mod(it, nout) == 0
@@ -248,6 +268,7 @@ end
         #     display(current())
         # end
     end
+    finalize_global_grid()
     return
 end
 
