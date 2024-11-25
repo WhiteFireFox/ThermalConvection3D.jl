@@ -136,7 +136,7 @@ end
 end
 
 ##################################################
-@views function ThermalConvection3D()
+@views function ThermalConvection3D(;do_viz=true)
     # Physics - dimensionally independent scales
     lz        = 1.0                # domain extent in z, m
     η0        = 1.0                # viscosity, Pa*s
@@ -173,14 +173,6 @@ end
     dampY     = 1.0 - dmp / ny                    # damping term for the y-momentum equation
     dampZ     = 1.0 - dmp / nz                    # damping term for the z-momentum equation
     # Array allocations
-    T         = @zeros(nx, ny, nz)
-    T        .= Data.Array([ΔT * exp(-(((ix - 1) * dx - 0.5 * lx) / w)^2 -
-                                       (((iy - 1) * dy - 0.5 * ly) / w)^2 -
-                                       (((iz - 1) * dz - 0.5 * lz) / w)^2)
-                            for ix = 1:nx, iy = 1:ny, iz = 1:nz])
-    T[:, :, 1  ] .=  ΔT / 2.0
-    T[:, :, end] .= -ΔT / 2.0
-    T_old     = @zeros(nx, ny, nz)
     Pt        = @zeros(nx, ny, nz)
     ∇V        = @zeros(nx, ny, nz)
     Vx        = @zeros(nx + 1, ny, nz)
@@ -191,9 +183,9 @@ end
     τxx       = @zeros(nx, ny, nz)
     τyy       = @zeros(nx, ny, nz)
     τzz       = @zeros(nx, ny, nz)
-    σxy       = @zeros(nx - 1, ny - 1, nz)
-    σxz       = @zeros(nx - 1, ny, nz - 1)
-    σyz       = @zeros(nx, ny - 1, nz - 1)
+    σxy       = @zeros(nx - 1, ny - 1, nz - 1)
+    σxz       = @zeros(nx - 1, ny - 1, nz - 1)
+    σyz       = @zeros(nx - 1, ny - 1, nz - 1)
     Rx        = @zeros(nx - 1, ny - 2, nz - 2)
     Ry        = @zeros(nx - 2, ny - 1, nz - 2)
     Rz        = @zeros(nx - 2, ny - 2, nz - 1)
@@ -208,6 +200,27 @@ end
     ErrVx     = @zeros(nx + 1, ny, nz)
     ErrVy     = @zeros(nx, ny + 1, nz)
     ErrVz     = @zeros(nx, ny, nz + 1)
+    T         = @zeros(nx, ny, nz)
+    T        .= Data.Array([ΔT * exp(-(((ix - 1) * dx - 0.5 * lx) / w)^2 -
+                                       (((iy - 1) * dy - 0.5 * ly) / w)^2 -
+                                       (((iz - 1) * dz - 0.5 * lz) / w)^2)
+                                            for ix = 1:nx, iy = 1:ny, iz = 1:nz])
+    T[:, :, 1  ] .=  ΔT / 2.0
+    T[:, :, end] .= -ΔT / 2.0
+    update_halo!(T)
+    T_old     = copy(T)
+
+    if do_viz
+        ENV["GKSwstype"]="nul"
+        if (me==0) if isdir("viz3Dmpi_out")==false mkdir("viz3Dmpi_out") end; loadpath="viz3Dmpi_out/"; anim=Animation(loadpath,String[]); println("Animation directory: $(anim.dir)") end
+        nx_v, ny_v, nz_v = (nx - 2) * dims[1], (ny - 2) * dims[2], (nz - 2) * dims[3]
+        (nx_v * ny_v * nz_v * sizeof(Data.Number) > 0.8 * Sys.free_memory()) && error("Not enough memory for visualization.")
+        T_v   = zeros(nx_v, ny_v, nz_v) # global array for visu
+        T_inn = zeros(nx - 2, ny - 2, nz - 2) # no halo local array for visu
+        xi_g, zi_g = LinRange(-lx / 2 + dx + dx / 2, lx / 2 - dx - dx / 2, nx_v), LinRange(-lz + dz + dz / 2, -dz - dz / 2, nz_v) # inner points only
+        iframe = 0
+    end
+
     # Time loop
     err_evo1 = []; err_evo2 = []
     for it = 1:nt
@@ -259,14 +272,13 @@ end
         update_halo!(T)
         @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, maximum([errVx, errVy, errVz]), errP)
         # Visualization (optional)
-        # if mod(it, nout) == 0
-        #     # Example: plot a mid-plane slice
-        #     iz_slice = nz ÷ 2
-        #     heatmap(-lx / 2:dx:lx / 2, -ly / 2:dy:ly / 2, Array(T)[:, :, iz_slice]',
-        #             aspect_ratio = 1, xlims = (-lx / 2, lx / 2), ylims = (-ly / 2, ly / 2),
-        #             c = :inferno, clims = (-0.1, 0.1), title = "T° (it = $it of $nt, z = $(iz_slice * dz - lz / 2))")
-        #     display(current())
-        # end
+        if mod(it, nout) == 0
+            T_inn .= Array(T)[2:end-1, 2:end-1, 2:end-1];   gather!(T_inn, T_v)
+            if me==0
+                p1 = heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]'; xlims=(xi_g[1], xi_g[end]), ylims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1))
+                png(p1, @sprintf("viz3Dmpi_out/%04d.png", iframe += 1))
+            end
+        end
     end
     finalize_global_grid()
     return
