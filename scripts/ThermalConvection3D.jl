@@ -164,14 +164,14 @@ end
     dmp       = 2                               # damping parameter
     st        = 5                               # quiver plotting spatial step
     # Derived numerics
-    dx, dy, dz = lx / (nx - 1), ly / (ny - 1), lz / (nz - 1)  # cell sizes
+    dx, dy, dz = lx / (nx_g() - 1), ly / (ny_g() - 1), lz / (nz_g() - 1)  # cell sizes
     ρ         = 1.0 / Pra * η0 / DcT                # density
     dt_diff   = 1.0 / 6.1 * min(dx, dy, dz)^2 / DcT      # diffusive CFL timestep limiter
     dτ_iter   = 1.0 / 8.1 * min(dx, dy, dz) / sqrt(η0 / ρ)  # iterative CFL pseudo-timestep limiter
     β         = 8.1 * dτ_iter^2 / min(dx, dy, dz)^2 / ρ     # numerical bulk compressibility
-    dampX     = 1.0 - dmp / nx                    # damping term for the x-momentum equation
-    dampY     = 1.0 - dmp / ny                    # damping term for the y-momentum equation
-    dampZ     = 1.0 - dmp / nz                    # damping term for the z-momentum equation
+    dampX     = 1.0 - dmp / nx_g()                    # damping term for the x-momentum equation
+    dampY     = 1.0 - dmp / ny_g()                    # damping term for the y-momentum equation
+    dampZ     = 1.0 - dmp / nz_g()                    # damping term for the z-momentum equation
     # Array allocations
     Pt        = @zeros(nx, ny, nz)
     ∇V        = @zeros(nx, ny, nz)
@@ -201,10 +201,10 @@ end
     ErrVy     = @zeros(nx, ny + 1, nz)
     ErrVz     = @zeros(nx, ny, nz + 1)
     T         = @zeros(nx, ny, nz)
-    T        .= Data.Array([ΔT * exp(-(((ix - 1) * dx - 0.5 * lx) / w)^2 -
-                                       (((iy - 1) * dy - 0.5 * ly) / w)^2 -
-                                       (((iz - 1) * dz - 0.5 * lz) / w)^2)
-                                            for ix = 1:nx, iy = 1:ny, iz = 1:nz])
+    T        .= Data.Array([ΔT * exp(- ((x_g(ix, dx, T) - 0.5 * lx) / w)^2 -
+                                       ((y_g(iy, dx, T) - 0.5 * ly) / w)^2 -
+                                       ((z_g(iz, dx, T) - 0.5 * lz) / w)^2)
+                                            for ix = 1:size(T, 1), iy = 1:size(T, 2), iz = 1:size(T, 3)])
     T[:, :, 1  ] .=  ΔT / 2.0
     T[:, :, end] .= -ΔT / 2.0
     update_halo!(T)
@@ -222,12 +222,12 @@ end
     end
 
     # Time loop
-    err_evo1 = []; err_evo2 = []
+    # err_evo1 = []; err_evo2 = []
     for it = 1:nt
         @parallel assign!(T_old, T)
         errVx, errVy, errVz, errP = 2 * ε, 2 * ε, 2 * ε, 2 * ε
         iter = 1; niter = 0
-        while (maximum([errVx, errVy, errVz]) > ε || errP > ε) && iter <= iterMax
+        while (errVz > ε || errP > ε) && iter <= iterMax
             # @parallel assign!(ErrVx, Vx)
             # @parallel assign!(ErrVy, Vy)
             @parallel assign!(ErrVz, Vz)
@@ -252,10 +252,10 @@ end
             if mod(iter, nerr) == 0
                 # errVx = maximum(abs.(Array(ErrVx))) / (1e-12 + maximum(abs.(Array(Vx))))
                 # errVy = maximum(abs.(Array(ErrVy))) / (1e-12 + maximum(abs.(Array(Vy))))
-                errVz = maximum(abs.(Array(ErrVz))) / (1e-12 + maximum(abs.(Array(Vz))))
-                errP  = maximum(abs.(Array(ErrP)))  / (1e-12 + maximum(abs.(Array(Pt))))
-                push!(err_evo1, maximum([errVx, errVy, errVz, errP]))
-                push!(err_evo2, iter)
+                errVz = max_g(abs.(Array(ErrVz))) / (1e-12 + max_g(abs.(Array(Vz))))
+                errP  = max_g(abs.(Array(ErrP)))  / (1e-12 + max_g(abs.(Array(Pt))))
+                # push!(err_evo1, maximum([errVx, errVy, errVz, errP]))
+                # push!(err_evo2, iter)
                 # @printf("Total steps = %d, errV=%1.3e, errP=%1.3e \n", iter, maximum([errVx, errVy, errVz]), errP)
             end
             iter += 1; niter += 1
@@ -263,14 +263,14 @@ end
         # Thermal solver
         @parallel compute_qT!(qTx, qTy, qTz, T, DcT, dx, dy, dz)
         @parallel advect_T!(dT_dt, qTx, qTy, qTz, T, Vx, Vy, Vz, dx, dy, dz)
-        dt_adv = min(dx / maximum(abs.(Array(Vx))),
-                     dy / maximum(abs.(Array(Vy))),
-                     dz / maximum(abs.(Array(Vz)))) / 3.1
+        dt_adv = min(dx / max_g(abs.(Array(Vx))),
+                     dy / max_g(abs.(Array(Vy))),
+                     dz / max_g(abs.(Array(Vz)))) / 3.1
         dt     = min(dt_diff, dt_adv)
         @parallel update_T!(T, T_old, dT_dt, dt)
         @parallel no_fluxZ_T!(T)
         update_halo!(T)
-        @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, maximum([errVx, errVy, errVz]), errP)
+        @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, errVz, errP)
         # Visualization (optional)
         if mod(it, nout) == 0
             T_inn .= Array(T)[2:end-1, 2:end-1, 2:end-1];   gather!(T_inn, T_v)
