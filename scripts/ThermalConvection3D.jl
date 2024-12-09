@@ -275,11 +275,12 @@ end
         if mod(it, nout) == 0
             T_inn .= Array(T)[2:end-1, 2:end-1, 2:end-1];   gather!(T_inn, T_v)
             if me==0
-                p1 = heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]'; xlims=(xi_g[1], xi_g[end]), ylims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1))
-                png(p1, @sprintf("viz3Dmpi_out/%04d.png", iframe += 1))
+                heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]', aspect_ratio=1, xlims=(xi_g[1], xi_g[end]), zlims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1), title="T° (it = $it of $nt)")
+                frame(anim)
             end
         end
     end
+    if (me==0) gif(anim, "ThermalConvect3D_MPI.gif", fps = 15) end
     finalize_global_grid()
     return
 end
