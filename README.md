@@ -55,33 +55,43 @@ To solve the above equations numerically, a pseudo-transient (or artificial comp
 ### 1. Momentum Equation with Pseudo-Time
 
 A pseudo-time $\tau$ is introduced to iteratively solve for velocity fields
+
 $$
 \rho_0 \frac{\partial \mathbf{V}}{\partial \tau} + \rho_0 \left( \frac{\partial \mathbf{V}}{\partial t} + \mathbf{V} \cdot \nabla \mathbf{V} \right) = -\nabla P + \nabla \cdot \boldsymbol{\tau} + \mathbf{F}_{\text{buoyancy}}.
 $$
+
 By choosing $\frac{\partial \mathbf{V}}{\partial t}$ to represent the physical time derivative and $\frac{\partial \mathbf{V}}{\partial \tau}$ as a pseudo-time derivative, one can iterate in $\tau$ until a quasi-steady state in pseudo-time is reached for each real time step $t$.
 
 ### 2. Continuity with Artificial Compressibility
 
 To circumvent solving a Poisson equation directly for pressure, an artificial compressibility $\beta$ can be introduced
+
 $$
 \beta \frac{\partial P}{\partial \tau} + \nabla \cdot \mathbf{V} = 0.
 $$
+
 As $\tau \to \infty$ (at each physical time step), $\nabla \cdot \mathbf{V} \to 0$, recovering incompressibility. The parameter $\beta$ is chosen to balance stability and convergence rates.
 
 ### 3. Temperature Update (Explicit/Implicit Time-Stepping)
 
 Once the velocity field $\mathbf{u}$ is known at time $t$, we update the temperature field using an explicit time-stepping method. The discretized energy equation is
+
 $$
 T^{n+1} = T^{n} + \Delta t \left(\frac{dT}{dt}\right),
 $$
+
 where $\frac{dT}{dt}$ is computed from the spatial discretization of advection and diffusion terms
+
 $$
 \frac{dT}{dt} = -\mathbf{V}\cdot\nabla T + \kappa \nabla^2 T.
 $$
+
 However, for the temperature field, we also can use the implicit time-stepping approach with pseudo-transient method. At each physical time step $t$, we can introduce a pseudo-time $\tau$
+
 $$
 \frac{\partial T}{\partial \tau} + \frac{T - T_{\text{old}}}{dt} + \mathbf{V} \cdot \nabla T = \kappa \nabla^2 T,
 $$
+
 where $T_{\text{old}}$ is the temperature from the previous physical time step and $dt$ is the physical time step size.
 
 ## Result
