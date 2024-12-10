@@ -86,7 +86,35 @@ where $T_{\text{old}}$ is the temperature from the previous physical time step a
 
 ## Result
 
-<img src="./docs/ThermalConvect2D_MPI.gif" width="50%">
+we verify our code on a large scale (global grid of `476x156x156`) for 3D thermal porous convection with multi-xPUs (8 GPUs). The results are as follows.
 
-<img src="./docs/ThermalConvect3D_MPI.gif" width="60%">
+```julia
+ar         = 3                               # aspect ratio
+nx, ny, nz = 80*ar-1, 80-1, 80-1             # numerical grid resolutions
+nt         = 5000                            # total number of timesteps
+nout       = 50                              # frequency of plotting
+```
+
+We can get the following results by executing this command.
+```julia
+sbatch ./scripts/sbatch.sh
+```
+or
+```julia
+srun -n8 bash -c "julia --project ./scripts/ThermalConvection3D.jl"
+```
+
+We provide a GIF showcasing the 2D slice of the 3D data at $ly/2$.
+
+<div align="center">
+    <img src="./docs/ThermalConvect2D_MPI.gif" width="50%">
+</div>
+
+We provide a file called `Visualise_3D.jl` to generate 3D image from `.bin` file. Then, we use `Visualise_GIF.py` to get a GIF showcasing the 3D data.
+
+<div align="center">
+    <img src="./docs/ThermalConvect3D_MPI.gif" width="50%">
+</div>
+
+
 
