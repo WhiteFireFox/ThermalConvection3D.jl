@@ -1,4 +1,4 @@
-const USE_GPU = false
+const USE_GPU = true
 using ParallelStencil, ImplicitGlobalGrid
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -153,12 +153,12 @@ end
     ρ0gα      = Ra * η0 * DcT / ΔT / ly^3  # thermal expansion coefficient
     dη_dT     = 1e-10 / ΔT         # viscosity's temperature dependence
     # Numerics
-    nx, ny, nz = 32,32,32  # numerical grid resolutions
+    nx, ny, nz = 80*ar-1, 80-1, 80-1  # numerical grid resolutions
     me, dims   = init_global_grid(nx, ny, nz)
-    b_width    = (2, 2, 2)
+    b_width    = (8, 8, 4)
     iterMax   = 10max(nx_g(),ny_g(),nz_g())     # maximal number of pseudo-transient iterations
-    nt        = 3000                            # total number of timesteps
-    nout      = 10                              # frequency of plotting
+    nt        = 5000                            # total number of timesteps
+    nout      = 50                              # frequency of plotting
     nerr      = ceil(2max(nx_g(),ny_g(),nz_g()))   # frequency of error checking
     ε         = 1e-4                            # nonlinear absolute tolerance
     dmp       = 2                               # damping parameter
@@ -270,13 +270,15 @@ end
         @parallel update_T!(T, T_old, dT_dt, dt)
         @parallel no_fluxZ_T!(T)
         update_halo!(T)
-        @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, errVz, errP)
+        if (me==0) @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, errVz, errP) end
         # Visualization (optional)
         if mod(it, nout) == 0
             T_inn .= Array(T)[2:end-1, 2:end-1, 2:end-1];   gather!(T_inn, T_v)
             if me==0
                 heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]', aspect_ratio=1, xlims=(xi_g[1], xi_g[end]), zlims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1), title="T° (it = $it of $nt)")
                 frame(anim)
+                save_array(@sprintf("viz3Dmpi_out/out_T_%04d", iframe), convert.(Float32, T_v))
+                iframe += 1
             end
         end
     end
