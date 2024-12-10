@@ -7,8 +7,8 @@ end
 
 function visualise(file_path::String, output_path::String)
     lx, ly, lz = 3.0, 1.0, 1.0
-    nx = 239
-    ny = nz = 79
+    nx = 474
+    ny = nz = 154
     T = zeros(Float32, nx, ny, nz)
     load_array(file_path, T)
     xc, yc, zc = LinRange(0, lx, nx), LinRange(0, ly, ny), LinRange(0, lz, nz)
@@ -31,4 +31,4 @@ function batch_visualise(input_dir::String, output_dir::String, start_idx::Int, 
     end
 end
 
-batch_visualise("../viz3Dmpi_out", "../output", 0, 99)
+batch_visualise("./viz3Dmpi_out", "./output", 0, 99)
