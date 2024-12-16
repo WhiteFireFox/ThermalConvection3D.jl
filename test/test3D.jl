@@ -38,7 +38,7 @@ end
 @testset "Reference Test" begin
     T           = ThermalConvection3D()
     T_ref       = zeros(Float32, 45, 13, 13)
-    load_array("./bin/out_T", T_ref)
+    load_array("../bin/out_T", T_ref)
     @test T_ref ≈ T
 end
 
