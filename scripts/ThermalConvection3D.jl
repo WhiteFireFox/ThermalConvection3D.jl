@@ -1,4 +1,4 @@
-const USE_GPU = true
+const USE_GPU = false
 using ParallelStencil, ImplicitGlobalGrid
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -9,9 +9,24 @@ end
 using Plots, Printf, Statistics, LinearAlgebra
 import MPI
 
+"""
+    max_g(A)
+
+Compute the global maximum of an array across all MPI processes.
+"""
 max_g(A) = (max_l = maximum(A); MPI.Allreduce(max_l, MPI.MAX, MPI.COMM_WORLD))
+"""
+    min_g(A)
+
+Compute the global minimum of an array across all MPI processes.
+"""
 min_g(A) = (min_l = minimum(A); MPI.Allreduce(min_l, MPI.MIN, MPI.COMM_WORLD))
 
+"""
+    save_array(Aname, A)
+
+Save an array `A` to a binary file with the filename derived from `Aname`.
+"""
 function save_array(Aname, A)
     fname = string(Aname, ".bin")
     out = open(fname, "w")
@@ -19,16 +34,31 @@ function save_array(Aname, A)
     close(out)
 end
 
+"""
+    @parallel function assign!(A::Data.Array, B::Data.Array)
+
+Assign values from array `B` to array `A` in a parallelized manner.
+"""
 @parallel function assign!(A::Data.Array, B::Data.Array)
     @all(A) = @all(B)
     return
 end
 
+"""
+    @parallel function compute_error!(Err_A::Data.Array, A::Data.Array)
+
+Compute the error by subtracting array `A` from `Err_A` in a parallelized manner.
+"""
 @parallel function compute_error!(Err_A::Data.Array, A::Data.Array)
     @all(Err_A) = @all(Err_A) - @all(A)
     return
 end
 
+"""
+    @parallel function compute_0!(RogT::Data.Array, Eta::Data.Array, ∇V::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, ρ0gα::Data.Number, η0::Data.Number, dη_dT::Data.Number, ΔT::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
+
+Compute initial values for buoyancy term (`RogT`), viscosity (`Eta`), and velocity divergence (`∇V`) in a parallelized manner.
+"""
 @parallel function compute_0!(RogT::Data.Array, Eta::Data.Array, ∇V::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, ρ0gα::Data.Number, η0::Data.Number, dη_dT::Data.Number, ΔT::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
     @all(RogT) = ρ0gα * @all(T)
     @all(Eta)  = η0 * (1.0 - dη_dT * (@all(T) + ΔT / 2.0))
@@ -36,6 +66,11 @@ end
     return
 end
 
+"""
+    @parallel function compute_1!(Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, σxy::Data.Array, σxz::Data.Array, σyz::Data.Array, Eta::Data.Array, ∇V::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
+
+Compute stress components and update pressure in a parallelized manner.
+"""
 @parallel function compute_1!(Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, σxy::Data.Array, σxz::Data.Array, σyz::Data.Array, Eta::Data.Array, ∇V::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
     @all(Pt)   = @all(Pt) - dτ_iter / β * @all(∇V)
     @all(τxx)  = 2.0 * @all(Eta) * (@d_xa(Vx) / dx - (1.0 / 3.0) * @all(∇V))
@@ -47,7 +82,11 @@ end
     return
 end
 
+"""
+    @parallel function compute_1!(Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, σxy::Data.Array, σxz::Data.Array, σyz::Data.Array, Eta::Data.Array, ∇V::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
 
+Update pressure and compute the stress components based on the current velocity, viscosity, and divergence of the velocity field.
+"""
 @parallel function compute_2!(Rx::Data.Array, Ry::Data.Array, Rz::Data.Array, dVxdτ::Data.Array, dVydτ::Data.Array, dVzdτ::Data.Array, Pt::Data.Array, RogT::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, σxy::Data.Array, σxz::Data.Array, σyz::Data.Array, ρ::Data.Number, dampX::Data.Number, dampY::Data.Number, dampZ::Data.Number, dτ_iter::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
     @all(Rx)    = 1.0 / ρ * (@d_xi(τxx) / dx + @d_ya(σxy) / dy + @d_za(σxz) / dz - @d_xi(Pt) / dx)
     @all(Ry)    = 1.0 / ρ * (@d_yi(τyy) / dy + @d_xa(σxy) / dx + @d_za(σyz) / dz - @d_yi(Pt) / dy)
@@ -58,6 +97,11 @@ end
     return
 end
 
+"""
+    @parallel function update_V!(Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dVxdτ::Data.Array, dVydτ::Data.Array, dVzdτ::Data.Array, dτ_iter::Data.Number)
+
+Update velocity components using computed velocity changes in a parallelized manner.
+"""
 @parallel function update_V!(Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dVxdτ::Data.Array, dVydτ::Data.Array, dVzdτ::Data.Array, dτ_iter::Data.Number)
     @inn(Vx) = @inn(Vx) + @all(dVxdτ) * dτ_iter
     @inn(Vy) = @inn(Vy) + @all(dVydτ) * dτ_iter
@@ -65,6 +109,11 @@ end
     return
 end
 
+"""
+    @parallel function compute_qT!(qTx::Data.Array, qTy::Data.Array, qTz::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
+
+Compute the heat flux components in the x, y, and z directions based on the temperature gradient.
+"""
 @parallel function compute_qT!(qTx::Data.Array, qTy::Data.Array, qTz::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number, dz::Data.Number)
     @all(qTx) = -DcT * @d_xi(T) / dx
     @all(qTy) = -DcT * @d_yi(T) / dy
@@ -72,6 +121,11 @@ end
     return
 end
 
+"""
+    @parallel_indices (ix, iy, iz) function advect_T!(dT_dt::Data.Array, qTx::Data.Array, qTy::Data.Array, qTz::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dx::Data.Number, dy::Data.Number, dz::Data.Number)
+
+Compute the rate of change of temperature (`dT_dt`) due to advection and heat flux in the x, y, and z directions.
+"""
 @parallel_indices (ix, iy, iz) function advect_T!(dT_dt::Data.Array, qTx::Data.Array, qTy::Data.Array, qTz::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, dx::Data.Number, dy::Data.Number, dz::Data.Number)
     if (ix <= size(dT_dt, 1) && iy <= size(dT_dt, 2) && iz <= size(dT_dt, 3))
         dT_dt[ix, iy, iz] = -((qTx[ix + 1, iy, iz] - qTx[ix, iy, iz]) / dx +
@@ -87,6 +141,11 @@ end
     return
 end
 
+"""
+    @parallel_indices (ix, iy, iz) function no_fluxZ_T!(T::Data.Array)
+
+Enforce no-flux boundary conditions on the temperature field `T` in the x and y directions.
+"""
 @parallel_indices (ix, iy, iz) function no_fluxZ_T!(T::Data.Array)
     nx, ny, nz = size(T)
     # x-direction
@@ -112,29 +171,54 @@ end
     return
 end
 
+"""
+    @parallel function update_T!(T::Data.Array, T_old::Data.Array, dT_dt::Data.Array, dt::Data.Number)
+
+Update the temperature field (`T`) using the previous temperature field and the rate of change of temperature.
+"""
 @parallel function update_T!(T::Data.Array, T_old::Data.Array, dT_dt::Data.Array, dt::Data.Number)
     @inn(T) = @inn(T_old) + @all(dT_dt)*dt
     return
 end
 
+"""
+    @parallel_indices (iy, iz) function bc_x!(A)
+
+Apply boundary conditions in the x-direction for a 3D array.
+"""
 @parallel_indices (iy, iz) function bc_x!(A::Data.Array)
     A[1  , iy, iz] = A[2    , iy, iz]
     A[end, iy, iz] = A[end - 1, iy, iz]
     return
 end
 
+"""
+    @parallel_indices (ix, iz) function bc_y!(A)
+
+Apply boundary conditions in the y-direction for a 3D array.
+"""
 @parallel_indices (ix, iz) function bc_y!(A::Data.Array)
     A[ix, 1  , iz] = A[ix, 2    , iz]
     A[ix, end, iz] = A[ix, end - 1, iz]
     return
 end
 
+"""
+    @parallel_indices (ix, iy) function bc_z!(A)
+
+Apply boundary conditions in the z-direction for a 3D array.
+"""
 @parallel_indices (ix, iy) function bc_z!(A::Data.Array)
     A[ix, iy, 1  ] = A[ix, iy, 2    ]
     A[ix, iy, end] = A[ix, iy, end - 1]
     return
 end
 
+"""
+    @ThermalConvection3D(;do_viz=true)
+
+Simulate 3D ThermalConvection with explicit temperature update method.
+"""
 ##################################################
 @views function ThermalConvection3D(;do_viz=true)
     # Physics - dimensionally independent scales
@@ -153,12 +237,13 @@ end
     ρ0gα      = Ra * η0 * DcT / ΔT / ly^3  # thermal expansion coefficient
     dη_dT     = 1e-10 / ΔT         # viscosity's temperature dependence
     # Numerics
-    nx, ny, nz = 80*ar-1, 80-1, 80-1  # numerical grid resolutions
+    # nx, ny, nz = 80*ar-1, 80-1, 80-1  # numerical grid resolutions
+    nx, ny, nz = 16*ar-1, 16-1, 16-1  # numerical grid resolutions
     me, dims   = init_global_grid(nx, ny, nz)
     b_width    = (8, 8, 4)
     iterMax   = 10max(nx_g(),ny_g(),nz_g())     # maximal number of pseudo-transient iterations
-    nt        = 5000                            # total number of timesteps
-    nout      = 50                              # frequency of plotting
+    nt        = 5                               # total number of timesteps
+    nout      = 1                               # frequency of plotting
     nerr      = ceil(2max(nx_g(),ny_g(),nz_g()))   # frequency of error checking
     ε         = 1e-4                            # nonlinear absolute tolerance
     dmp       = 2                               # damping parameter
@@ -272,19 +357,20 @@ end
         update_halo!(T)
         if (me==0) @printf("it = %d (iter = %d), errV=%1.3e, errP=%1.3e \n", it, niter, errVz, errP) end
         # Visualization (optional)
-        if mod(it, nout) == 0
+        if do_viz && mod(it, nout) == 0
             T_inn .= Array(T)[2:end-1, 2:end-1, 2:end-1];   gather!(T_inn, T_v)
-            if me==0
-                heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]', aspect_ratio=1, xlims=(xi_g[1], xi_g[end]), zlims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1), title="T° (it = $it of $nt)")
-                frame(anim)
-                save_array(@sprintf("viz3Dmpi_out/out_T_%04d", iframe), convert.(Float32, T_v))
-                iframe += 1
-            end
+            # if me==0
+            #     heatmap(xi_g, zi_g, T_v[:, ceil(Int, ny_g() / 2), :]', aspect_ratio=1, xlims=(xi_g[1], xi_g[end]), zlims=(zi_g[1], zi_g[end]), c=:inferno, clims=(-0.1,0.1), title="T° (it = $it of $nt)")
+            #     frame(anim)
+            #     save_array(@sprintf("viz3Dmpi_out/out_T_%04d", iframe), convert.(Float32, T_v))
+            #     iframe += 1
+            # end
         end
     end
-    if (me==0) gif(anim, "ThermalConvect3D_MPI.gif", fps = 15) end
+    # if do_viz && (me==0) gif(anim, "ThermalConvect3D_MPI.gif", fps = 15) end
     finalize_global_grid()
-    return
+    # if do_viz save_array(@sprintf("viz3Dmpi_out/out_T"), convert.(Float32, T_v)) end
+    return T_v
 end
 
-ThermalConvection3D()
+# ThermalConvection3D()

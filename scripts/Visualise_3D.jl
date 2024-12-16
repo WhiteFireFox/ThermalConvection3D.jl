@@ -1,10 +1,20 @@
 using GLMakie
 
+"""
+    load_array(Aname, A)
+
+Load binary data from a file into the given array.
+"""
 function load_array(Aname,A)
     fname = string(Aname,".bin")
     fid=open(fname,"r"); read!(fid,A); close(fid)
 end
 
+"""
+    visualise(file_path::String, output_path::String)
+
+Visualise a 3D temperature field and save the visualization as a PNG file.
+"""
 function visualise(file_path::String, output_path::String)
     lx, ly, lz = 3.0, 1.0, 1.0
     nx = 474
@@ -19,6 +29,11 @@ function visualise(file_path::String, output_path::String)
     return fig
 end
 
+"""
+    batch_visualise(input_dir::String, output_dir::String, start_idx::Int, end_idx::Int)
+
+Process and visualize a batch of temperature field files and save them as PNG images.
+"""
 function batch_visualise(input_dir::String, output_dir::String, start_idx::Int, end_idx::Int)
     for i in start_idx:end_idx
         # Format the file index as a 4-digit number (e.g., "0001", "0002", etc.)
