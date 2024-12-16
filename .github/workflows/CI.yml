@@ -17,4 +17,4 @@ jobs:
           arch: ${{ matrix.julia-arch }}
       - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-buildpkg@latest
-      - run: julia --check-bounds=yes --color=yes -e 'import Pkg; Pkg.activate("."); import Pkg; Pkg.add("Printf"); Pkg.add("Printf"); Pkg.test()'
+      - run: julia --check-bounds=yes --color=yes -e 'import Pkg; Pkg.activate("."); import Pkg; Pkg.add("Printf"); Pkg.add("Statistics"); Pkg.test()'
