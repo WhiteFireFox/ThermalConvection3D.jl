@@ -120,6 +120,20 @@ $$
 
 where $T_{\text{old}}$ is the temperature from the previous physical time step and $dt$ is the physical time step size.
 
+## Running
+
+We can get the results by executing this command.
+```julia
+sbatch ./scripts/sbatch.sh
+srun -n8 bash -c "julia --project ./scripts/ThermalConvection3D.jl"
+```
+
+Moreover, if we choose to use the implicit temperature update method, the results can be obtained by executing the corresponding command.
+```julia
+sbatch ./scripts/sbatch_implicit.sh
+srun -n8 bash -c "julia --project ./scripts/ThermalConvection3D_Implicit.jl"
+```
+
 ## Result
 
 We verify our code on a large scale (global grid of `476x156x156`) for 3D thermal porous convection with multi-xPUs (8 GPUs). The results are as follows.
@@ -129,18 +143,6 @@ ar         = 3                               # aspect ratio
 nx, ny, nz = 80*ar-1, 80-1, 80-1             # numerical grid resolutions
 nt         = 5000                            # total number of timesteps
 nout       = 50                              # frequency of plotting
-```
-
-We can get the following results by executing this command.
-```julia
-sbatch ./scripts/sbatch.sh
-srun -n8 bash -c "julia --project ./scripts/ThermalConvection3D.jl"
-```
-
-Moreover, if we choose to use the implicit temperature update method, the following results can be obtained by executing the corresponding command.
-```julia
-sbatch ./scripts/sbatch_implicit.sh
-srun -n8 bash -c "julia --project ./scripts/ThermalConvection3D_Implicit.jl"
 ```
 
 ### 2D Slice of the 3D Data
