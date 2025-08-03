@@ -1,5 +1,10 @@
 # ThermalConvection3D
+
 [![Build Status](https://github.com/WhiteFireFox/ThermalConvection3D.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/WhiteFireFox/ThermalConvection3D.jl/actions/workflows/CI.yml?query=branch%3Amain)
+
+Author: Zhihao Cao
+
+Course: [Solving Partial Differential Equations in Parallel on GPUs](https://www.vorlesungen.ethz.ch/Vorlesungsverzeichnis/lerneinheit.view?semkez=2024W&ansicht=KATALOGDATEN&lerneinheitId=182481&lang=en)
 
 ## Introduction
 Thermo-mechanical convection processes play a fundamental role in geophysical and industrial applications, such as the dynamics of Earth’s mantle and thermal plumes. These phenomena involve complex interactions between viscous flow and heat transfer, governed by the coupled equations of fluid dynamics and heat advection-diffusion. To study such systems, computational models must account for the non-linear behavior of materials, including temperature-dependent viscosity, under varying thermal and mechanical conditions.
